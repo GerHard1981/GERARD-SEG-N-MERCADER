@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GSM · MusicBox Cabin</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --panel: #181b24;
+      --panel-2: #1f2330;
+      --accent: #6c8cff;
+      --accent-2: #9b6cff;
+      --text: #e7e9f0;
+      --muted: #8b90a3;
+      --border: #2a2f3d;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: radial-gradient(1200px 600px at 70% -10%, #20243400, #20243480), var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    header {
+      padding: 24px 28px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    header .logo {
+      width: 40px; height: 40px; border-radius: 12px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      display: grid; place-items: center; font-size: 20px;
+    }
+    header h1 { font-size: 18px; margin: 0; letter-spacing: .3px; }
+    header p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+    main { padding: 20px 28px 160px; max-width: 980px; margin: 0 auto; }
+    .meta {
+      display: flex; gap: 16px; flex-wrap: wrap;
+      color: var(--muted); font-size: 13px; margin-bottom: 16px;
+    }
+    .meta code {
+      background: var(--panel-2); padding: 2px 7px; border-radius: 6px;
+      color: var(--text);
+    }
+    .search {
+      width: 100%; padding: 11px 14px; margin-bottom: 16px;
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 10px; color: var(--text); font-size: 14px;
+      outline: none;
+    }
+    .search:focus { border-color: var(--accent); }
+    ul.tracks { list-style: none; margin: 0; padding: 0; }
+    li.track {
+      display: flex; align-items: center; gap: 12px;
+      padding: 11px 14px; border: 1px solid var(--border);
+      border-radius: 10px; margin-bottom: 8px;
+      background: var(--panel); cursor: pointer; transition: .12s;
+    }
+    li.track:hover { border-color: var(--accent); background: var(--panel-2); }
+    li.track.playing { border-color: var(--accent-2); box-shadow: 0 0 0 1px var(--accent-2) inset; }
+    .track .idx { width: 26px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .track .info { flex: 1; min-width: 0; }
+    .track .title { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .track .sub { font-size: 12px; color: var(--muted); }
+    .track .badge {
+      font-size: 11px; text-transform: uppercase; color: var(--accent);
+      border: 1px solid var(--border); padding: 2px 7px; border-radius: 6px;
+    }
+    .empty, .error {
+      padding: 40px; text-align: center; color: var(--muted);
+      border: 1px dashed var(--border); border-radius: 12px;
+    }
+    .error { color: #ff8b8b; border-color: #5a2a2a; }
+    footer {
+      position: fixed; left: 0; right: 0; bottom: 0;
+      background: var(--panel); border-top: 1px solid var(--border);
+      padding: 14px 28px;
+    }
+    .player { max-width: 980px; margin: 0 auto; display: flex; align-items: center; gap: 16px; }
+    .player .now { flex: 1; min-width: 0; }
+    .player .now .t { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .player .now .s { font-size: 12px; color: var(--muted); }
+    audio { width: 420px; max-width: 50vw; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">&#9835;</div>
+    <div>
+      <h1>MusicBox Cabin</h1>
+      <p>GERARD-SEG-N-MERCADER · biblioteca local</p>
+    </div>
+  </header>
+
+  <main>
+    <div class="meta" id="meta"></div>
+    <input class="search" id="search" type="search" placeholder="Buscar por titulo o archivo..." />
+    <div id="list"><div class="empty">Cargando biblioteca...</div></div>
+  </main>
+
+  <footer>
+    <div class="player">
+      <div class="now">
+        <div class="t" id="nowTitle">Nada en reproduccion</div>
+        <div class="s" id="nowSub">Selecciona una pista</div>
+      </div>
+      <audio id="audio" controls preload="none"></audio>
+    </div>
+  </footer>
+
+  <script>
+    const listEl = document.getElementById('list');
+    const metaEl = document.getElementById('meta');
+    const searchEl = document.getElementById('search');
+    const audio = document.getElementById('audio');
+    const nowTitle = document.getElementById('nowTitle');
+    const nowSub = document.getElementById('nowSub');
+
+    let tracks = [];
+    let currentId = null;
+
+    function fmtSize(bytes) {
+      if (bytes == null) return '';
+      const mb = bytes / (1024 * 1024);
+      return mb >= 1 ? mb.toFixed(1) + ' MB' : (bytes / 1024).toFixed(0) + ' KB';
+    }
+
+    function play(track) {
+      currentId = track.id;
+      audio.src = '/api/music/stream/' + encodeURIComponent(track.id);
+      audio.play().catch(() => {});
+      nowTitle.textContent = track.title;
+      nowSub.textContent = track.filename;
+      render(searchEl.value);
+    }
+
+    function render(filter) {
+      const f = (filter || '').toLowerCase().trim();
+      const items = tracks.filter(t =>
+        !f || t.title.toLowerCase().includes(f) || t.filename.toLowerCase().includes(f));
+
+      if (!items.length) {
+        listEl.innerHTML = '<div class="empty">' +
+          (tracks.length ? 'Sin resultados para la busqueda.' :
+           'No hay archivos de audio. Configura MUSIC_DIRS en tu equipo.') + '</div>';
+        return;
+      }
+
+      const ul = document.createElement('ul');
+      ul.className = 'tracks';
+      items.forEach((t, i) => {
+        const li = document.createElement('li');
+        li.className = 'track' + (t.id === currentId ? ' playing' : '');
+        li.innerHTML =
+          '<div class="idx">' + (i + 1) + '</div>' +
+          '<div class="info">' +
+            '<div class="title"></div>' +
+            '<div class="sub"></div>' +
+          '</div>' +
+          '<div class="badge">' + (t.ext || '') + '</div>';
+        li.querySelector('.title').textContent = t.title;
+        li.querySelector('.sub').textContent = t.filename + (t.size ? ' · ' + fmtSize(t.size) : '');
+        li.addEventListener('click', () => play(t));
+        ul.appendChild(li);
+      });
+      listEl.innerHTML = '';
+      listEl.appendChild(ul);
+    }
+
+    async function load() {
+      try {
+        const res = await fetch('/api/music/library');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        tracks = data.tracks || [];
+        const dirs = (data.directories || []).map(d => '<code>' + d + '</code>').join(' ') || '<em>ninguna</em>';
+        metaEl.innerHTML = '<span>' + data.count + ' pistas</span><span>Carpetas: ' + dirs + '</span>';
+        render('');
+      } catch (e) {
+        listEl.innerHTML = '<div class="error">Error al cargar la biblioteca: ' + e.message + '</div>';
+      }
+    }
+
+    searchEl.addEventListener('input', () => render(searchEl.value));
+    audio.addEventListener('ended', () => {
+      const idx = tracks.findIndex(t => t.id === currentId);
+      if (idx >= 0 && idx + 1 < tracks.length) play(tracks[idx + 1]);
+    });
+
+    load();
+  </script>
+</body>
+</html>

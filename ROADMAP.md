@@ -63,8 +63,12 @@ matching local y Cabin básica.
   reverificación contra Discogs y botón "Marcar verificado".
 - [x] Tests de scoring, persistencia, verificación y endpoints.
 
+## Infra
+
+- [x] **Integración continua** (GitHub Actions): en cada push a `main` y en cada PR
+  instala dependencias, hace `py_compile` y ejecuta la suite con `pytest`.
+
 ## Pendiente / siguiente
 
 - Indexado incremental / en segundo plano para bibliotecas muy grandes.
-- Integración continua (GitHub Actions) ejecutando la suite de tests.
 - App de escritorio (Electron) replicando las pantallas de la web.

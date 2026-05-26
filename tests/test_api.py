@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
+import app.cabin as cabin
 from app.main import app
 
 
@@ -29,7 +30,9 @@ def test_health_reports_discogs_cache_and_matches(client: TestClient) -> None:
     assert "count" in body["matches"]
 
 
-def test_library_degrades_without_index(client: TestClient) -> None:
+def test_library_degrades_without_index(client: TestClient, tmp_path, monkeypatch) -> None:
+    # Apunta a un índice inexistente para probar la degradación con independencia del entorno.
+    monkeypatch.setattr(cabin, "LIBRARY_DB", tmp_path / "no-index.sqlite3")
     res = client.get("/api/music/library?limit=10")
     assert res.status_code == 200
     body = res.json()

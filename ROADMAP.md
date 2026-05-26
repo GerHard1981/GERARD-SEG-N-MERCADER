@@ -52,8 +52,19 @@ matching local y Cabin básica.
 - [x] **Botón "Indexar biblioteca"** en la UI (estado "sin indexar").
 - [x] Tests del indexador y de la lectura del índice desde `/api/music/library`.
 
+## Fase 4 — verificación de matches de Discogs
+
+- [x] **Scoring de confianza** (`score_match`, con `difflib`): cada match recibe
+  un `score` (0..1) y etiqueta (`strong`/`likely`/`weak`/`no_result`) en vez del
+  antiguo `top_result_unverified`. Columna `score` con migración segura.
+- [x] **Lectura de matches guardados**: `GET /api/discogs/matches` (por `path` o
+  recientes) y verificación manual con `POST /api/discogs/matches/{id}/verify`.
+- [x] **UI de Detalle**: carga automática del match guardado (con score y estado),
+  reverificación contra Discogs y botón "Marcar verificado".
+- [x] Tests de scoring, persistencia, verificación y endpoints.
+
 ## Pendiente / siguiente
 
-- Verificación de matches de Discogs (hoy se guardan como `top_result_unverified`).
 - Indexado incremental / en segundo plano para bibliotecas muy grandes.
+- Integración continua (GitHub Actions) ejecutando la suite de tests.
 - App de escritorio (Electron) replicando las pantallas de la web.

@@ -1,0 +1,39 @@
+﻿# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Secretos y conexiones - NUNCA subir
+.env
+.env.*
+!.env.example
+api_connections.json
+
+# Datos locales
+data/
+*.sqlite
+*.db
+
+# IDEs y editores
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Logs
+*.log
+
+# Google Drive artefactos
+.tmp.drivedownload/
+.tmp.driveupload/

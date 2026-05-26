@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0e1116" />
+<title>MusicBox</title>
+<style>
+  :root {
+    --bg: #0e1116;
+    --bg-elev: #161b22;
+    --bg-elev-2: #1f2630;
+    --border: #2a323d;
+    --text: #e6edf3;
+    --text-dim: #9aa7b4;
+    --accent: #4f9dff;
+    --accent-press: #3b82e6;
+    --danger: #ff6b6b;
+    --ok: #3fb950;
+    --radius: 14px;
+    --tabbar-h: 60px;
+    --header-h: 56px;
+    --safe-b: env(safe-area-inset-bottom, 0px);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    overflow: hidden;
+  }
+  button { font: inherit; color: inherit; cursor: pointer; border: none; background: none; }
+  a { color: var(--accent); }
+
+  .app {
+    display: grid;
+    grid-template-rows: var(--header-h) 1fr auto;
+    height: 100dvh;
+    height: 100vh;
+  }
+
+  /* Header */
+  header.topbar {
+    display: flex; align-items: center; gap: 12px;
+    padding: 0 16px;
+    background: var(--bg-elev);
+    border-bottom: 1px solid var(--border);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; }
+  .brand .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px var(--accent); }
+  .brand small { font-weight: 500; font-size: 12px; color: var(--text-dim); }
+  .topbar .grow { flex: 1; }
+  .stat-pill {
+    font-size: 12px; color: var(--text-dim);
+    background: var(--bg-elev-2); border: 1px solid var(--border);
+    padding: 5px 10px; border-radius: 999px; white-space: nowrap;
+  }
+
+  /* Views container */
+  main.content { position: relative; overflow: hidden; }
+  .view { position: absolute; inset: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 14px 14px calc(14px + var(--safe-b)); display: none; }
+  .view.active { display: block; }
+  .view h2 { margin: 4px 2px 12px; font-size: 15px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-dim); }
+
+  /* Search */
+  .search-wrap { position: sticky; top: -14px; background: var(--bg); padding: 14px 0 10px; margin-top: -14px; z-index: 5; }
+  .search {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--bg-elev-2); border: 1px solid var(--border);
+    border-radius: 12px; padding: 0 12px;
+  }
+  .search input {
+    flex: 1; background: none; border: none; outline: none; color: var(--text);
+    padding: 12px 0; font-size: 16px;
+  }
+  .search .clear { color: var(--text-dim); padding: 6px; display: none; }
+  .search.has-value .clear { display: block; }
+
+  /* Track list */
+  .tracklist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .track {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--bg-elev); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 10px 12px;
+  }
+  .track.playing { border-color: var(--accent); }
+  .track .play {
+    flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%;
+    background: var(--bg-elev-2); display: grid; place-items: center; font-size: 16px;
+  }
+  .track.playing .play { background: var(--accent); color: #07101e; }
+  .track .meta { flex: 1; min-width: 0; }
+  .track .t { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .track .s { font-size: 13px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .track .info { flex: 0 0 auto; width: 36px; height: 36px; border-radius: 10px; color: var(--text-dim); display: grid; place-items: center; }
+  .track .info:active { background: var(--bg-elev-2); }
+
+  .pager { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 16px 2px calc(20px + var(--safe-b)); }
+  .pager .range { font-size: 13px; color: var(--text-dim); }
+  .btn {
+    background: var(--bg-elev-2); border: 1px solid var(--border);
+    padding: 10px 16px; border-radius: 10px; font-weight: 600;
+  }
+  .btn:disabled { opacity: .4; }
+  .btn.primary { background: var(--accent); color: #07101e; border-color: transparent; }
+  .btn.primary:active { background: var(--accent-press); }
+
+  .empty { text-align: center; color: var(--text-dim); padding: 48px 20px; }
+  .empty .big { font-size: 38px; margin-bottom: 8px; }
+  .empty code { background: var(--bg-elev-2); padding: 2px 6px; border-radius: 6px; color: var(--text); font-size: 13px; }
+  .spinner { display: inline-block; width: 22px; height: 22px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Player */
+  .player-full { display: flex; flex-direction: column; align-items: center; gap: 18px; padding-top: 8px; }
+  .art {
+    width: min(70vw, 280px); aspect-ratio: 1; border-radius: 20px;
+    background: linear-gradient(135deg, var(--bg-elev-2), #2b3a52);
+    display: grid; place-items: center; font-size: 64px; color: #51607a;
+    border: 1px solid var(--border);
+  }
+  .now { text-align: center; width: 100%; padding: 0 8px; }
+  .now .t { font-size: 20px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .now .s { color: var(--text-dim); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .progress { width: 100%; max-width: 460px; }
+  .seek { width: 100%; -webkit-appearance: none; appearance: none; height: 6px; border-radius: 3px; background: var(--bg-elev-2); outline: none; }
+  .seek::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); }
+  .seek::-moz-range-thumb { width: 16px; height: 16px; border: none; border-radius: 50%; background: var(--accent); }
+  .times { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-dim); margin-top: 6px; }
+  .controls { display: flex; align-items: center; justify-content: center; gap: 26px; }
+  .controls .ctl { width: 52px; height: 52px; display: grid; place-items: center; font-size: 24px; border-radius: 50%; }
+  .controls .ctl.big { width: 72px; height: 72px; background: var(--accent); color: #07101e; font-size: 30px; }
+  .controls .ctl.big:active { background: var(--accent-press); }
+  .controls .ctl:disabled { opacity: .35; }
+
+  /* Detail */
+  .detail .card { background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
+  .detail .card h3 { margin: 0 0 12px; font-size: 14px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-dim); }
+  .kv { display: grid; grid-template-columns: 96px 1fr; gap: 6px 12px; font-size: 14px; }
+  .kv dt { color: var(--text-dim); }
+  .kv dd { margin: 0; word-break: break-word; }
+  .discogs-result { display: flex; gap: 12px; align-items: flex-start; }
+  .discogs-result img { width: 72px; height: 72px; border-radius: 10px; object-fit: cover; background: var(--bg-elev-2); }
+  .badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-dim); }
+  .note { font-size: 13px; color: var(--text-dim); }
+  .note.err { color: var(--danger); }
+
+  /* Mini player */
+  .miniplayer {
+    display: none; align-items: center; gap: 12px;
+    background: var(--bg-elev); border-top: 1px solid var(--border);
+    padding: 8px 14px;
+  }
+  .miniplayer.show { display: flex; }
+  .miniplayer .mp-art { width: 40px; height: 40px; border-radius: 8px; background: linear-gradient(135deg, var(--bg-elev-2), #2b3a52); display: grid; place-items: center; color: #51607a; }
+  .miniplayer .mp-meta { flex: 1; min-width: 0; }
+  .miniplayer .mp-meta .t { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .miniplayer .mp-meta .s { font-size: 12px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .miniplayer .mp-btn { width: 40px; height: 40px; display: grid; place-items: center; font-size: 20px; }
+  .miniplayer .mp-bar { position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--bg-elev-2); }
+  .miniplayer .mp-bar > span { display: block; height: 100%; width: 0; background: var(--accent); }
+  .miniplayer { position: relative; }
+
+  /* Bottom tab bar */
+  nav.tabbar {
+    display: flex; background: var(--bg-elev); border-top: 1px solid var(--border);
+    padding-bottom: var(--safe-b); height: calc(var(--tabbar-h) + var(--safe-b));
+  }
+  nav.tabbar button {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    color: var(--text-dim); font-size: 11px; height: var(--tabbar-h);
+  }
+  nav.tabbar button .ic { font-size: 22px; line-height: 1; }
+  nav.tabbar button.active { color: var(--accent); }
+
+  /* ---- Tablet / landscape: two panes side by side ---- */
+  @media (min-width: 760px) and (orientation: landscape), (min-width: 900px) {
+    .app { grid-template-columns: minmax(320px, 1fr) minmax(360px, 1.05fr); grid-template-rows: var(--header-h) 1fr auto; }
+    header.topbar { grid-column: 1 / -1; }
+    main.content { grid-column: 1 / 2; border-right: 1px solid var(--border); }
+    /* Right pane stacks player + detail; library lives in the scroll area on the left */
+    .right-pane { grid-column: 2 / 3; grid-row: 2 / 3; overflow-y: auto; padding: 14px; display: block; }
+    .miniplayer { grid-column: 1 / -1; }
+    nav.tabbar { display: none; }
+    /* On wide layout, library is always visible on the left */
+    #view-library { display: block !important; position: absolute; }
+    /* Player & detail rendered in the right pane instead of stacked views */
+    #view-player, #view-detail { display: none !important; }
+    .right-pane .pane-block { margin-bottom: 22px; }
+    .right-pane .pane-block h2 { margin: 2px 2px 12px; font-size: 15px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-dim); }
+  }
+  /* On narrow layout, the right pane is not used */
+  .right-pane { display: none; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand"><span class="dot"></span><span>MusicBox<br><small>Gestión musical</small></span></div>
+    <div class="grow"></div>
+    <span class="stat-pill" id="stat">…</span>
+  </header>
+
+  <main class="content">
+    <!-- BIBLIOTECA -->
+    <section class="view active" id="view-library">
+      <div class="search-wrap">
+        <div class="search" id="searchBox">
+          <span aria-hidden="true">🔍</span>
+          <input id="q" type="search" inputmode="search" placeholder="Buscar por título, artista o álbum…" autocomplete="off" />
+          <button class="clear" id="clearQ" aria-label="Limpiar">✕</button>
+        </div>
+      </div>
+      <ul class="tracklist" id="list"></ul>
+      <div id="listState"></div>
+      <div class="pager" id="pager" hidden>
+        <button class="btn" id="prev">‹ Anterior</button>
+        <span class="range" id="range"></span>
+        <button class="btn" id="next">Siguiente ›</button>
+      </div>
+    </section>
+
+    <!-- REPRODUCTOR (narrow) -->
+    <section class="view" id="view-player">
+      <div class="player-full" id="playerFull"></div>
+    </section>
+
+    <!-- DETALLE (narrow) -->
+    <section class="view" id="view-detail">
+      <div class="detail" id="detailBody"></div>
+    </section>
+  </main>
+
+  <!-- Right pane used only on tablet/landscape -->
+  <aside class="right-pane" id="rightPane">
+    <div class="pane-block"><h2>Reproductor</h2><div class="player-full" id="playerFull2"></div></div>
+    <div class="pane-block"><h2>Detalle</h2><div class="detail" id="detailBody2"></div></div>
+  </aside>
+
+  <!-- MINI PLAYER -->
+  <div class="miniplayer" id="mini">
+    <div class="mp-bar"><span id="miniBar"></span></div>
+    <div class="mp-art">♪</div>
+    <div class="mp-meta"><div class="t" id="miniT">—</div><div class="s" id="miniS"></div></div>
+    <button class="mp-btn" id="miniPrev" aria-label="Anterior">⏮</button>
+    <button class="mp-btn" id="miniPlay" aria-label="Play/Pausa">▶</button>
+    <button class="mp-btn" id="miniNext" aria-label="Siguiente">⏭</button>
+  </div>
+
+  <nav class="tabbar">
+    <button data-view="library" class="active"><span class="ic">≣</span>Biblioteca</button>
+    <button data-view="player"><span class="ic">♪</span>Reproductor</button>
+    <button data-view="detail"><span class="ic">ⓘ</span>Detalle</button>
+  </nav>
+</div>
+
+<audio id="audio" preload="metadata"></audio>
+
+<script>
+"use strict";
+const API = "";
+const LIMIT = 50;
+
+const state = {
+  q: "", offset: 0, total: 0, indexed: true,
+  tracks: [], current: -1, selected: null, loading: false,
+};
+
+const $ = (s) => document.querySelector(s);
+const audio = $("#audio");
+
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+function fmtTime(sec) {
+  if (sec == null || isNaN(sec) || sec < 0) return "0:00";
+  sec = Math.floor(sec);
+  const m = Math.floor(sec / 60), s = sec % 60;
+  return m + ":" + String(s).padStart(2, "0");
+}
+function trackTitle(t) { return t.title || t.filename || "(sin título)"; }
+function trackSub(t) {
+  const parts = [t.artist, t.album].filter(Boolean);
+  return parts.join(" · ") || t.folder || t.extension || "";
+}
+
+/* ---------- Navigation ---------- */
+function isWide() {
+  return window.matchMedia("(min-width: 760px) and (orientation: landscape), (min-width: 900px)").matches;
+}
+function showView(name) {
+  document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
+  const el = $("#view-" + name);
+  if (el) el.classList.add("active");
+  document.querySelectorAll("nav.tabbar button").forEach((b) =>
+    b.classList.toggle("active", b.dataset.view === name));
+}
+document.querySelectorAll("nav.tabbar button").forEach((b) =>
+  b.addEventListener("click", () => showView(b.dataset.view)));
+
+/* ---------- Library ---------- */
+async function loadLibrary() {
+  state.loading = true;
+  renderListState();
+  const url = `${API}/api/music/library?limit=${LIMIT}&offset=${state.offset}` +
+    (state.q ? `&q=${encodeURIComponent(state.q)}` : "");
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    state.tracks = data.tracks || [];
+    state.total = data.total || 0;
+    state.indexed = data.indexed !== false;
+    state.message = data.message || "";
+  } catch (err) {
+    state.tracks = []; state.total = 0; state.indexed = true;
+    state.message = "Error al cargar la biblioteca: " + err.message;
+  } finally {
+    state.loading = false;
+    renderList();
+    updateStat();
+  }
+}
+
+function updateStat() {
+  $("#stat").textContent = state.indexed
+    ? state.total.toLocaleString("es") + " tracks"
+    : "sin indexar";
+}
+
+function renderListState() {
+  const box = $("#listState");
+  if (state.loading) { box.innerHTML = `<div class="empty"><div class="spinner"></div></div>`; }
+  else box.innerHTML = "";
+}
+
+function renderList() {
+  const list = $("#list");
+  const box = $("#listState");
+  const pager = $("#pager");
+  if (state.loading) { list.innerHTML = ""; pager.hidden = true; return; }
+
+  if (!state.indexed) {
+    list.innerHTML = "";
+    pager.hidden = true;
+    box.innerHTML = `<div class="empty"><div class="big">🗂️</div>
+      <p>La biblioteca aún no está indexada.</p>
+      <p class="note">${esc(state.message || "Ejecuta el indexador para generar la base de datos.")}</p></div>`;
+    return;
+  }
+  if (state.tracks.length === 0) {
+    list.innerHTML = "";
+    pager.hidden = true;
+    box.innerHTML = `<div class="empty"><div class="big">🔎</div>
+      <p>${state.q ? "Sin resultados para «" + esc(state.q) + "»." : "No hay tracks todavía."}</p></div>`;
+    return;
+  }
+
+  box.innerHTML = "";
+  list.innerHTML = state.tracks.map((t, i) => `
+    <li class="track ${i === state.current ? "playing" : ""}" data-i="${i}">
+      <button class="play" data-act="play" data-i="${i}" aria-label="Reproducir">${i === state.current && !audio.paused ? "❚❚" : "▶"}</button>
+      <div class="meta" data-act="detail" data-i="${i}">
+        <div class="t">${esc(trackTitle(t))}</div>
+        <div class="s">${esc(trackSub(t))}</div>
+      </div>
+      <button class="info" data-act="detail" data-i="${i}" aria-label="Detalle">ⓘ</button>
+    </li>`).join("");
+
+  const from = state.total ? state.offset + 1 : 0;
+  const to = state.offset + state.tracks.length;
+  $("#range").textContent = `${from}–${to} de ${state.total.toLocaleString("es")}`;
+  $("#prev").disabled = state.offset === 0;
+  $("#next").disabled = state.offset + LIMIT >= state.total;
+  pager.hidden = false;
+}
+
+$("#list").addEventListener("click", (e) => {
+  const el = e.target.closest("[data-act]");
+  if (!el) return;
+  const i = Number(el.dataset.i);
+  if (el.dataset.act === "play") playIndex(i);
+  else openDetail(i);
+});
+
+/* ---------- Search ---------- */
+let searchTimer = null;
+$("#q").addEventListener("input", (e) => {
+  const v = e.target.value;
+  $("#searchBox").classList.toggle("has-value", v.length > 0);
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    state.q = v.trim();
+    state.offset = 0;
+    loadLibrary();
+  }, 250);
+});
+$("#clearQ").addEventListener("click", () => {
+  $("#q").value = ""; $("#searchBox").classList.remove("has-value");
+  state.q = ""; state.offset = 0; loadLibrary(); $("#q").focus();
+});
+
+/* ---------- Pager ---------- */
+$("#prev").addEventListener("click", () => {
+  if (state.offset === 0) return;
+  state.offset = Math.max(0, state.offset - LIMIT);
+  loadLibrary(); scrollTop();
+});
+$("#next").addEventListener("click", () => {
+  if (state.offset + LIMIT >= state.total) return;
+  state.offset += LIMIT;
+  loadLibrary(); scrollTop();
+});
+function scrollTop() { $("#view-library").scrollTo({ top: 0, behavior: "smooth" }); }
+
+/* ---------- Player ---------- */
+function playIndex(i) {
+  const t = state.tracks[i];
+  if (!t || !t.path) return;
+  state.current = i;
+  state.selected = t;
+  audio.src = `${API}/api/music/stream?path=${encodeURIComponent(t.path)}`;
+  audio.play().catch(() => {});
+  renderPlayer();
+  renderList();
+  renderMini();
+  $("#mini").classList.add("show");
+}
+function togglePlay() {
+  if (!audio.src) { if (state.tracks.length) playIndex(0); return; }
+  if (audio.paused) audio.play().catch(() => {}); else audio.pause();
+}
+function next() { if (state.current + 1 < state.tracks.length) playIndex(state.current + 1); }
+function prev() {
+  if (audio.currentTime > 3) { audio.currentTime = 0; return; }
+  if (state.current > 0) playIndex(state.current - 1);
+}
+
+function playerHTML() {
+  const t = state.selected;
+  if (!t) return `<div class="empty"><div class="big">♪</div><p>Elige un track de la biblioteca para reproducir.</p></div>`;
+  const playing = !audio.paused && audio.src;
+  return `
+    <div class="art">♪</div>
+    <div class="now">
+      <div class="t">${esc(trackTitle(t))}</div>
+      <div class="s">${esc(trackSub(t))}</div>
+    </div>
+    <div class="progress">
+      <input class="seek" id="seek" type="range" min="0" max="1000" value="0" />
+      <div class="times"><span id="cur">0:00</span><span id="dur">0:00</span></div>
+    </div>
+    <div class="controls">
+      <button class="ctl" data-pact="prev" aria-label="Anterior">⏮</button>
+      <button class="ctl big" data-pact="toggle" aria-label="Play/Pausa">${playing ? "❚❚" : "▶"}</button>
+      <button class="ctl" data-pact="next" aria-label="Siguiente" ${state.current + 1 >= state.tracks.length ? "disabled" : ""}>⏭</button>
+    </div>`;
+}
+function renderPlayer() {
+  const html = playerHTML();
+  $("#playerFull").innerHTML = html;
+  $("#playerFull2").innerHTML = html;
+  bindSeek();
+  updateProgress();
+}
+function bindSeek() {
+  document.querySelectorAll("#seek").forEach((s) => {
+    s.addEventListener("input", () => {
+      if (audio.duration) audio.currentTime = (s.value / 1000) * audio.duration;
+    });
+  });
+}
+document.addEventListener("click", (e) => {
+  const el = e.target.closest("[data-pact]");
+  if (!el) return;
+  const a = el.dataset.pact;
+  if (a === "toggle") togglePlay();
+  else if (a === "next") next();
+  else if (a === "prev") prev();
+});
+
+function renderMini() {
+  const t = state.selected;
+  $("#miniT").textContent = t ? trackTitle(t) : "—";
+  $("#miniS").textContent = t ? trackSub(t) : "";
+  $("#miniPlay").textContent = (!audio.paused && audio.src) ? "❚❚" : "▶";
+}
+$("#miniPlay").addEventListener("click", togglePlay);
+$("#miniNext").addEventListener("click", next);
+$("#miniPrev").addEventListener("click", prev);
+
+function updateProgress() {
+  const ratio = audio.duration ? audio.currentTime / audio.duration : 0;
+  document.querySelectorAll("#seek").forEach((s) => { if (document.activeElement !== s) s.value = Math.round(ratio * 1000); });
+  const cur = document.querySelectorAll("#cur"), dur = document.querySelectorAll("#dur");
+  cur.forEach((e) => e.textContent = fmtTime(audio.currentTime));
+  dur.forEach((e) => e.textContent = fmtTime(audio.duration));
+  $("#miniBar").style.width = (ratio * 100) + "%";
+}
+audio.addEventListener("timeupdate", updateProgress);
+audio.addEventListener("durationchange", updateProgress);
+audio.addEventListener("play", () => { renderMini(); refreshPlayBtns(); });
+audio.addEventListener("pause", () => { renderMini(); refreshPlayBtns(); });
+audio.addEventListener("ended", next);
+function refreshPlayBtns() {
+  document.querySelectorAll('[data-pact="toggle"]').forEach((b) => b.textContent = (!audio.paused && audio.src) ? "❚❚" : "▶");
+  renderList();
+}
+
+/* ---------- Detail ---------- */
+function openDetail(i) {
+  state.selected = state.tracks[i];
+  if (i != null) state.detailIndex = i;
+  renderDetail();
+  if (!isWide()) showView("detail");
+  loadTags(state.selected);
+}
+function detailHTML(t, tags, tagsLoading) {
+  if (!t) return `<div class="empty"><div class="big">ⓘ</div><p>Selecciona un track para ver sus detalles.</p></div>`;
+  const rows = [
+    ["Título", trackTitle(t)],
+    ["Artista", t.artist || "—"],
+    ["Álbum", t.album || "—"],
+    ["Año", t.year || (tags && tags.date) || "—"],
+    ["Género", t.genre || "—"],
+    ["Formato", (t.extension || "").replace(".", "").toUpperCase() || "—"],
+    ["Duración", t.duration_seconds ? fmtTime(t.duration_seconds) : "—"],
+    ["Bitrate", t.bitrate ? Math.round(t.bitrate / 1000) + " kbps" : "—"],
+    ["Ruta", t.path || "—"],
+  ];
+  return `
+    <div class="card">
+      <h3>Metadatos</h3>
+      <dl class="kv">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
+    </div>
+    <div class="card">
+      <h3>Discogs</h3>
+      <div id="discogsBox"><button class="btn primary" data-dact="match">Buscar match en Discogs</button>
+        <p class="note">Consulta la API de Discogs y guarda el resultado localmente.</p></div>
+    </div>`;
+}
+function renderDetail() {
+  const html = detailHTML(state.selected, state.tags);
+  $("#detailBody").innerHTML = html;
+  $("#detailBody2").innerHTML = html;
+}
+async function loadTags(t) {
+  if (!t || !t.path) return;
+  try {
+    const res = await fetch(`${API}/api/music/tags?path=${encodeURIComponent(t.path)}`);
+    if (res.ok) { state.tags = await res.json(); renderDetail(); }
+  } catch (_) { /* tags are best-effort */ }
+}
+document.addEventListener("click", (e) => {
+  const el = e.target.closest("[data-dact]");
+  if (!el || el.dataset.dact !== "match") return;
+  matchDiscogs();
+});
+async function matchDiscogs() {
+  const t = state.selected;
+  if (!t || !t.path) return;
+  document.querySelectorAll("#discogsBox").forEach((b) => b.innerHTML = `<div class="spinner"></div>`);
+  try {
+    const res = await fetch(`${API}/api/discogs/match-file`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: t.path }),
+    });
+    const data = await res.json();
+    renderDiscogs(data, res.ok);
+  } catch (err) {
+    document.querySelectorAll("#discogsBox").forEach((b) =>
+      b.innerHTML = `<p class="note err">No se pudo consultar Discogs: ${esc(err.message)}</p>`);
+  }
+}
+function renderDiscogs(data, ok) {
+  let html;
+  const top = data && data.saved && data.saved.top_result;
+  const resp = data && data.discogs_response;
+  if (resp && resp.error) {
+    html = `<p class="note err">Discogs respondió con error (HTTP ${esc(resp.status_code || "?")}). Revisa el token en <code>.env</code>.</p>`;
+  } else if (top && top.id) {
+    const results = (resp && resp.data && resp.data.results) || [];
+    const r0 = results[0] || {};
+    const thumb = r0.cover_image || r0.thumb || "";
+    const uri = top.uri ? (top.uri.startsWith("http") ? top.uri : "https://www.discogs.com" + top.uri) : null;
+    html = `<div class="discogs-result">
+        ${thumb ? `<img src="${esc(thumb)}" alt="" referrerpolicy="no-referrer" />` : `<div class="mp-art" style="width:72px;height:72px">♪</div>`}
+        <div>
+          <div class="t" style="font-weight:600">${esc(top.title || "(sin título)")}</div>
+          <div class="note">${esc(top.year || r0.year || "")} ${r0.format ? "· " + esc([].concat(r0.format).join(", ")) : ""}</div>
+          <div style="margin-top:6px"><span class="badge">release ${esc(top.id)}</span>
+          ${uri ? ` <a href="${esc(uri)}" target="_blank" rel="noopener">Ver en Discogs ↗</a>` : ""}</div>
+        </div>
+      </div>
+      <p class="note" style="margin-top:10px">Coincidencia automática (sin verificar). Guardada en la base local.</p>`;
+  } else {
+    html = `<p class="note">Sin coincidencias en Discogs para este archivo.</p>`;
+  }
+  document.querySelectorAll("#discogsBox").forEach((b) => b.innerHTML = html);
+}
+
+/* ---------- Layout changes ---------- */
+const mq = window.matchMedia("(min-width: 760px) and (orientation: landscape), (min-width: 900px)");
+mq.addEventListener("change", () => { renderPlayer(); renderDetail(); });
+
+/* ---------- Init ---------- */
+renderPlayer();
+renderDetail();
+loadLibrary();
+</script>
+</body>
+</html>

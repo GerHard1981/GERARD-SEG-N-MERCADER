@@ -347,7 +347,8 @@ function renderList() {
     pager.hidden = true;
     box.innerHTML = `<div class="empty"><div class="big">🗂️</div>
       <p>La biblioteca aún no está indexada.</p>
-      <p class="note">${esc(state.message || "Ejecuta el indexador para generar la base de datos.")}</p></div>`;
+      <p class="note">${esc(state.message || "Ejecuta el indexador para generar la base de datos.")}</p>
+      <button class="btn primary" data-ract="reindex" style="margin-top:14px">Indexar biblioteca</button></div>`;
     return;
   }
   if (state.tracks.length === 0) {
@@ -414,6 +415,27 @@ $("#next").addEventListener("click", () => {
   loadLibrary(); scrollTop();
 });
 function scrollTop() { $("#view-library").scrollTo({ top: 0, behavior: "smooth" }); }
+
+/* ---------- Reindex ---------- */
+async function reindex(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = "Indexando…"; }
+  $("#listState").innerHTML = `<div class="empty"><div class="spinner"></div><p class="note">Indexando biblioteca…</p></div>`;
+  try {
+    const res = await fetch(`${API}/api/music/reindex`, { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || ("HTTP " + res.status));
+    state.offset = 0;
+    await loadLibrary();
+  } catch (err) {
+    $("#listState").innerHTML = `<div class="empty"><div class="big">⚠️</div>
+      <p class="note err">No se pudo indexar: ${esc(err.message)}</p>
+      <button class="btn primary" data-ract="reindex" style="margin-top:14px">Reintentar</button></div>`;
+  }
+}
+document.addEventListener("click", (e) => {
+  const el = e.target.closest('[data-ract="reindex"]');
+  if (el) reindex(el);
+});
 
 /* ---------- Player ---------- */
 function playIndex(i) {

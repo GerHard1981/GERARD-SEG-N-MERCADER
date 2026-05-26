@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Query, Response
 
+from app.services.indexer import build_index
 from app.services.music_library import library_summary, list_audio_files, read_audio_tags
 
 router = APIRouter(prefix="/api/music", tags=["music"])
@@ -37,3 +38,16 @@ def files(
 @router.get("/tags")
 def tags(path: str) -> dict:
     return read_audio_tags(path)
+
+
+@router.post(
+    "/reindex",
+    summary="Reindexar la biblioteca",
+    description=(
+        "Escanea las raíces configuradas, lee tags con mutagen y reconstruye el "
+        "índice SQLite que consume `/api/music/library`. Solo lee archivos; es una "
+        "operación síncrona que puede tardar en bibliotecas grandes."
+    ),
+)
+def reindex() -> dict:
+    return build_index()

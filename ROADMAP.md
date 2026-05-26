@@ -41,8 +41,19 @@ matching local y Cabin básica.
 - [x] **5. Refactor de `app/cabin.py`** con el HTML separado a
   `app/static/index.html` (entregado en la Fase 1 / PR #1).
 
+## Fase 3 — indexado de la biblioteca
+
+- [x] **Indexador reutilizable** (`app/services/indexer.py`) que escanea
+  `settings.music_master`, lee tags con mutagen y puebla el índice SQLite
+  (`<MUSICBOX_ROOT>/05_INDEXES/music_inventory.sqlite3`) que consume
+  `/api/music/library`. Idempotente (`INSERT OR REPLACE` por ruta) y solo lectura.
+- [x] **CLI `index_music.py`** en la raíz que ejecuta el indexador y resume stats.
+- [x] **Endpoint `POST /api/music/reindex`** para reconstruir el índice desde la web.
+- [x] **Botón "Indexar biblioteca"** en la UI (estado "sin indexar").
+- [x] Tests del indexador y de la lectura del índice desde `/api/music/library`.
+
 ## Pendiente / siguiente
 
-- Mejora de indexado (`index_music.py`) y verificación de matches de Discogs
-  (hoy se guardan como `top_result_unverified`).
+- Verificación de matches de Discogs (hoy se guardan como `top_result_unverified`).
+- Indexado incremental / en segundo plano para bibliotecas muy grandes.
 - App de escritorio (Electron) replicando las pantallas de la web.

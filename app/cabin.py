@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 
 from app.core.config import settings
+from app.services.indexer import index_db_path
 
 router = APIRouter(tags=["web"])
 USER = os.environ.get("USERPROFILE", str(Path.home()))
@@ -18,7 +19,7 @@ ALLOWED_ROOTS = [
 ]
 ALLOWED_EXTENSIONS = {".mp3",".wav",".flac",".aiff",".aif",".m4a",".ogg",".aac",".opus"}
 MIME_TYPES = {".mp3":"audio/mpeg",".wav":"audio/wav",".flac":"audio/flac",".aiff":"audio/aiff",".aif":"audio/aiff",".m4a":"audio/mp4",".aac":"audio/aac",".ogg":"audio/ogg",".opus":"audio/opus"}
-LIBRARY_DB = settings.musicbox_root / "05_INDEXES" / "music_inventory.sqlite3"
+LIBRARY_DB = index_db_path()
 STATIC_DIR = Path(__file__).parent / "static"
 INDEX_HTML = STATIC_DIR / "index.html"
 

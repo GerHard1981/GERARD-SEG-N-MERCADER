@@ -53,17 +53,16 @@ def library_summary() -> Dict[str, object]:
 def list_audio_files(limit: int = 100, offset: int = 0, contains: str = "") -> Dict[str, object]:
     rows: List[Dict[str, object]] = []
     contains_l = contains.lower().strip()
-    skipped = 0
+    total = 0
     scanned = 0
     for path in iter_audio_files():
         scanned += 1
         if contains_l and contains_l not in str(path).lower():
             continue
-        if skipped < offset:
-            skipped += 1
+        index = total  # zero-based position among matching files
+        total += 1
+        if index < offset or len(rows) >= limit:
             continue
-        if len(rows) >= limit:
-            break
         stat = None
         try:
             stat = path.stat()
@@ -79,7 +78,7 @@ def list_audio_files(limit: int = 100, offset: int = 0, contains: str = "") -> D
                 "modified": stat.st_mtime if stat else None,
             }
         )
-    return {"limit": limit, "offset": offset, "returned": len(rows), "scanned": scanned, "files": rows}
+    return {"limit": limit, "offset": offset, "returned": len(rows), "total": total, "scanned": scanned, "files": rows}
 
 
 def read_audio_tags(path: str) -> Dict[str, object]:

@@ -2,7 +2,7 @@ from __future__ import annotations
 import os, re, sqlite3
 from pathlib import Path
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 
 from app.core.config import settings
@@ -49,9 +49,10 @@ async def serve_index():
     return HTMLResponse(INDEX_HTML.read_text(encoding="utf-8"))
 
 @router.get("/api/music/library")
-async def list_library(q: Optional[str]=Query(None), limit: int=Query(500,ge=1,le=5000), offset: int=Query(0,ge=0)):
+async def list_library(response: Response, q: Optional[str]=Query(None, description="Filtro sobre artista, título, álbum o nombre de archivo."), limit: int=Query(500,ge=1,le=5000,description="Elementos por página (máximo 5000)."), offset: int=Query(0,ge=0,description="Desplazamiento inicial.")):
     conn = open_db()
     if conn is None:
+        response.headers["X-Total-Count"] = "0"
         return {"tracks":[],"total":0,"indexed":False,"message":f"Run index_music.py to create {LIBRARY_DB}"}
     where, params = "", []
     if q:
@@ -61,6 +62,7 @@ async def list_library(q: Optional[str]=Query(None), limit: int=Query(500,ge=1,l
     rows = c.execute(f"SELECT id,full_path,filename,extension,size_bytes,artist,title,album,year,genre,duration_seconds,bitrate FROM tracks{where} ORDER BY artist,album,title LIMIT ? OFFSET ?", params+[limit,offset]).fetchall()
     tracks = [{"id":r["id"],"path":r["full_path"],"filename":r["filename"],"extension":r["extension"],"artist":r["artist"] or "","title":r["title"] or r["filename"] or "(untitled)","album":r["album"] or "","year":r["year"] or "","genre":r["genre"] or "","duration_seconds":r["duration_seconds"],"bitrate":r["bitrate"]} for r in rows]
     conn.close()
+    response.headers["X-Total-Count"] = str(total)
     return {"tracks":tracks,"total":total,"limit":limit,"offset":offset,"indexed":True}
 
 @router.get("/api/music/library/stats")

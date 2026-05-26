@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.core.config import settings
+from app.connectors.discogs_client import DiscogsError
 from app.routers.health import router as health_router
 from app.routers.music import router as music_router
 from app.routers.discogs import router as discogs_router
@@ -20,7 +22,20 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Total-Count"],
 )
+
+
+@app.exception_handler(DiscogsError)
+async def discogs_error_handler(request: Request, exc: DiscogsError) -> JSONResponse:
+    return JSONResponse(
+        status_code=getattr(exc, "status_code", 502),
+        content={
+            "error": "discogs_error",
+            "detail": str(exc),
+            "upstream_status": exc.upstream_status,
+        },
+    )
 
 app.include_router(health_router)
 app.include_router(music_router)

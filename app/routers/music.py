@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Response
 
 from app.services.music_library import library_summary, list_audio_files, read_audio_tags
 
 router = APIRouter(prefix="/api/music", tags=["music"])
+
+MAX_FILES_LIMIT = 1000
 
 
 @router.get("/summary")
@@ -12,9 +14,24 @@ def summary() -> dict:
     return library_summary()
 
 
-@router.get("/files")
-def files(limit: int = Query(100, ge=1, le=1000), offset: int = Query(0, ge=0), contains: str = "") -> dict:
-    return list_audio_files(limit=limit, offset=offset, contains=contains)
+@router.get(
+    "/files",
+    summary="Listar archivos de audio (paginado)",
+    description=(
+        "Escanea la biblioteca local y devuelve archivos de audio paginados. "
+        f"`limit` admite hasta {MAX_FILES_LIMIT} por página; la respuesta incluye "
+        "la cabecera `X-Total-Count` con el total de coincidencias."
+    ),
+)
+def files(
+    response: Response,
+    limit: int = Query(100, ge=1, le=MAX_FILES_LIMIT, description=f"Elementos por página (máximo {MAX_FILES_LIMIT})."),
+    offset: int = Query(0, ge=0, description="Desplazamiento inicial."),
+    contains: str = Query("", description="Filtro de subcadena sobre la ruta del archivo."),
+) -> dict:
+    result = list_audio_files(limit=limit, offset=offset, contains=contains)
+    response.headers["X-Total-Count"] = str(result.get("total", 0))
+    return result
 
 
 @router.get("/tags")

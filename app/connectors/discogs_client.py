@@ -13,7 +13,57 @@ from app.core.config import settings
 
 
 class DiscogsError(RuntimeError):
-    pass
+    """Base error for Discogs interactions. Maps to HTTP 502 by default."""
+
+    status_code = 502
+
+    def __init__(self, message: str, *, payload: Any = None, upstream_status: Optional[int] = None) -> None:
+        super().__init__(message)
+        self.payload = payload
+        self.upstream_status = upstream_status
+
+
+class DiscogsAuthError(DiscogsError):
+    status_code = 401
+
+
+class DiscogsForbiddenError(DiscogsError):
+    status_code = 403
+
+
+class DiscogsNotFoundError(DiscogsError):
+    status_code = 404
+
+
+class DiscogsRateLimitError(DiscogsError):
+    status_code = 429
+
+
+class DiscogsUpstreamError(DiscogsError):
+    status_code = 502
+
+
+class DiscogsNetworkError(DiscogsError):
+    status_code = 503
+
+
+_STATUS_EXCEPTIONS = {
+    401: DiscogsAuthError,
+    403: DiscogsForbiddenError,
+    404: DiscogsNotFoundError,
+    429: DiscogsRateLimitError,
+}
+
+
+def exception_for_status(status: int, payload: Any = None) -> DiscogsError:
+    """Build the typed exception that matches an upstream Discogs status code."""
+    cls = _STATUS_EXCEPTIONS.get(status)
+    if cls is not None:
+        return cls(f"Discogs API responded with {status}", payload=payload, upstream_status=status)
+    exc = DiscogsError(f"Discogs API responded with {status}", payload=payload, upstream_status=status)
+    # Propagate other client errors verbatim; collapse upstream 5xx into 502.
+    exc.status_code = status if 400 <= status < 500 else 502
+    return exc
 
 
 class DiscogsClient:
@@ -104,7 +154,14 @@ class DiscogsClient:
             )
             con.commit()
 
-    def _request(self, method: str, path: str, params: Optional[Dict[str, Any]] = None, use_cache: bool = True) -> Dict[str, Any]:
+    def _request(
+        self,
+        method: str,
+        path: str,
+        params: Optional[Dict[str, Any]] = None,
+        use_cache: bool = True,
+        raise_on_error: bool = False,
+    ) -> Dict[str, Any]:
         params = {k: v for k, v in (params or {}).items() if v not in (None, "", [])}
         url = path if path.startswith("http") else f"{self.base_url}{path}"
         key = self._cache_key(method, url, params)
@@ -119,7 +176,10 @@ class DiscogsClient:
         if elapsed < 0.25:
             time.sleep(0.25 - elapsed)
 
-        response = self.session.request(method, url, params=params, headers=self._headers(), timeout=30)
+        try:
+            response = self.session.request(method, url, params=params, headers=self._headers(), timeout=30)
+        except requests.RequestException as exc:
+            raise DiscogsNetworkError(f"Could not reach Discogs: {exc}") from exc
         self._last_request_at = time.time()
 
         rate_headers = {
@@ -134,6 +194,8 @@ class DiscogsClient:
             data = {"raw": response.text}
 
         if response.status_code >= 400:
+            if raise_on_error:
+                raise exception_for_status(response.status_code, payload=data)
             return {
                 "cached": False,
                 "status_code": response.status_code,
@@ -161,25 +223,25 @@ class DiscogsClient:
         }
 
     def identity(self) -> Dict[str, Any]:
-        return self._request("GET", "/oauth/identity", use_cache=False)
+        return self._request("GET", "/oauth/identity", use_cache=False, raise_on_error=True)
 
     def search(self, **params: Any) -> Dict[str, Any]:
         return self._request("GET", "/database/search", params=params)
 
     def release(self, release_id: int) -> Dict[str, Any]:
-        return self._request("GET", f"/releases/{release_id}")
+        return self._request("GET", f"/releases/{release_id}", raise_on_error=True)
 
     def master(self, master_id: int) -> Dict[str, Any]:
-        return self._request("GET", f"/masters/{master_id}")
+        return self._request("GET", f"/masters/{master_id}", raise_on_error=True)
 
     def artist(self, artist_id: int) -> Dict[str, Any]:
-        return self._request("GET", f"/artists/{artist_id}")
+        return self._request("GET", f"/artists/{artist_id}", raise_on_error=True)
 
     def label(self, label_id: int) -> Dict[str, Any]:
-        return self._request("GET", f"/labels/{label_id}")
+        return self._request("GET", f"/labels/{label_id}", raise_on_error=True)
 
     def collection_folders(self, username: str) -> Dict[str, Any]:
-        return self._request("GET", f"/users/{username}/collection/folders", use_cache=False)
+        return self._request("GET", f"/users/{username}/collection/folders", use_cache=False, raise_on_error=True)
 
     def collection_releases(self, username: str, folder_id: int = 0, page: int = 1, per_page: int = 50) -> Dict[str, Any]:
         return self._request(
@@ -187,10 +249,11 @@ class DiscogsClient:
             f"/users/{username}/collection/folders/{folder_id}/releases",
             params={"page": page, "per_page": per_page},
             use_cache=False,
+            raise_on_error=True,
         )
 
     def wants(self, username: str, page: int = 1, per_page: int = 50) -> Dict[str, Any]:
-        return self._request("GET", f"/users/{username}/wants", params={"page": page, "per_page": per_page}, use_cache=False)
+        return self._request("GET", f"/users/{username}/wants", params={"page": page, "per_page": per_page}, use_cache=False, raise_on_error=True)
 
 
 discogs_client = DiscogsClient()

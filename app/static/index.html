@@ -535,11 +535,15 @@ function refreshPlayBtns() {
 function openDetail(i) {
   state.selected = state.tracks[i];
   if (i != null) state.detailIndex = i;
+  state.tags = null;
+  state.savedMatch = undefined; // undefined = cargando
+  state.matchError = null;
   renderDetail();
   if (!isWide()) showView("detail");
   loadTags(state.selected);
+  loadSavedMatch(state.selected);
 }
-function detailHTML(t, tags, tagsLoading) {
+function detailHTML(t, tags) {
   if (!t) return `<div class="empty"><div class="big">ⓘ</div><p>Selecciona un track para ver sus detalles.</p></div>`;
   const rows = [
     ["Título", trackTitle(t)],
@@ -559,14 +563,52 @@ function detailHTML(t, tags, tagsLoading) {
     </div>
     <div class="card">
       <h3>Discogs</h3>
-      <div id="discogsBox"><button class="btn primary" data-dact="match">Buscar match en Discogs</button>
-        <p class="note">Consulta la API de Discogs y guarda el resultado localmente.</p></div>
+      <div id="discogsBox"></div>
     </div>`;
 }
 function renderDetail() {
   const html = detailHTML(state.selected, state.tags);
   $("#detailBody").innerHTML = html;
   $("#detailBody2").innerHTML = html;
+  paintDiscogs();
+}
+function discogsUri(uri) { return uri ? (uri.startsWith("http") ? uri : "https://www.discogs.com" + uri) : null; }
+function scoreLabelEs(note) {
+  return ({ strong: "confianza alta", likely: "confianza media", weak: "confianza baja", no_result: "sin resultado", verified_by_user: "verificado" })[note] || note || "";
+}
+function discogsBoxHTML() {
+  if (state.matchError) {
+    return `<p class="note err">${esc(state.matchError)}</p>
+      <button class="btn" data-dact="match" style="margin-top:10px">Reintentar</button>`;
+  }
+  if (state.savedMatch === undefined) return `<div class="spinner"></div>`;
+  const m = state.savedMatch;
+  if (m && m.top_release_id) {
+    const uri = discogsUri(m.top_uri);
+    const pct = (m.score != null) ? Math.round(m.score * 100) + "%" : "—";
+    const badge = m.verified
+      ? `<span class="badge" style="border-color:var(--ok);color:var(--ok)">✓ verificado</span>`
+      : `<span class="badge">${esc(scoreLabelEs(m.score_note))} · ${pct}</span>`;
+    return `<div class="discogs-result">
+        <div class="mp-art" style="width:72px;height:72px">♪</div>
+        <div>
+          <div class="t" style="font-weight:600">${esc(m.top_title || "(sin título)")}</div>
+          <div class="note">${esc(m.top_year || "")}</div>
+          <div style="margin-top:6px">${badge} <span class="badge">release ${esc(m.top_release_id)}</span>
+            ${uri ? ` <a href="${esc(uri)}" target="_blank" rel="noopener">Ver en Discogs ↗</a>` : ""}</div>
+        </div>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" data-dact="match">Actualizar en Discogs</button>
+        ${m.verified ? "" : `<button class="btn primary" data-vact="${esc(m.id)}">Marcar verificado</button>`}
+      </div>`;
+  }
+  return `<button class="btn primary" data-dact="match">Buscar match en Discogs</button>
+    <p class="note">Consulta la API de Discogs y guarda el resultado localmente.</p>`;
+}
+function paintDiscogs() {
+  const html = discogsBoxHTML();
+  document.querySelectorAll("#discogsBox").forEach((b) => b.innerHTML = html);
 }
 async function loadTags(t) {
   if (!t || !t.path) return;
@@ -575,52 +617,56 @@ async function loadTags(t) {
     if (res.ok) { state.tags = await res.json(); renderDetail(); }
   } catch (_) { /* tags are best-effort */ }
 }
+async function loadSavedMatch(t) {
+  if (!t || !t.path) return;
+  state.matchError = null;
+  state.savedMatch = undefined;
+  paintDiscogs();
+  try {
+    const res = await fetch(`${API}/api/discogs/matches?path=${encodeURIComponent(t.path)}&limit=1`);
+    const data = await res.json();
+    state.savedMatch = (data.matches && data.matches[0]) || null;
+  } catch (_) {
+    state.savedMatch = null;
+  }
+  paintDiscogs();
+}
 document.addEventListener("click", (e) => {
-  const el = e.target.closest("[data-dact]");
-  if (!el || el.dataset.dact !== "match") return;
-  matchDiscogs();
+  const m = e.target.closest('[data-dact="match"]');
+  if (m) { matchDiscogs(); return; }
+  const v = e.target.closest("[data-vact]");
+  if (v) verifyMatch(v.dataset.vact);
 });
 async function matchDiscogs() {
   const t = state.selected;
   if (!t || !t.path) return;
-  document.querySelectorAll("#discogsBox").forEach((b) => b.innerHTML = `<div class="spinner"></div>`);
+  state.matchError = null;
+  state.savedMatch = undefined;
+  paintDiscogs();
   try {
     const res = await fetch(`${API}/api/discogs/match-file`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: t.path }),
     });
     const data = await res.json();
-    renderDiscogs(data, res.ok);
+    const resp = data && data.discogs_response;
+    if (!res.ok || (resp && resp.error)) {
+      const code = (resp && resp.status_code) || res.status;
+      state.matchError = `Discogs respondió con error (HTTP ${code}). Revisa el token en .env.`;
+      paintDiscogs();
+      return;
+    }
+    await loadSavedMatch(t);
   } catch (err) {
-    document.querySelectorAll("#discogsBox").forEach((b) =>
-      b.innerHTML = `<p class="note err">No se pudo consultar Discogs: ${esc(err.message)}</p>`);
+    state.matchError = "No se pudo consultar Discogs: " + err.message;
+    paintDiscogs();
   }
 }
-function renderDiscogs(data, ok) {
-  let html;
-  const top = data && data.saved && data.saved.top_result;
-  const resp = data && data.discogs_response;
-  if (resp && resp.error) {
-    html = `<p class="note err">Discogs respondió con error (HTTP ${esc(resp.status_code || "?")}). Revisa el token en <code>.env</code>.</p>`;
-  } else if (top && top.id) {
-    const results = (resp && resp.data && resp.data.results) || [];
-    const r0 = results[0] || {};
-    const thumb = r0.cover_image || r0.thumb || "";
-    const uri = top.uri ? (top.uri.startsWith("http") ? top.uri : "https://www.discogs.com" + top.uri) : null;
-    html = `<div class="discogs-result">
-        ${thumb ? `<img src="${esc(thumb)}" alt="" referrerpolicy="no-referrer" />` : `<div class="mp-art" style="width:72px;height:72px">♪</div>`}
-        <div>
-          <div class="t" style="font-weight:600">${esc(top.title || "(sin título)")}</div>
-          <div class="note">${esc(top.year || r0.year || "")} ${r0.format ? "· " + esc([].concat(r0.format).join(", ")) : ""}</div>
-          <div style="margin-top:6px"><span class="badge">release ${esc(top.id)}</span>
-          ${uri ? ` <a href="${esc(uri)}" target="_blank" rel="noopener">Ver en Discogs ↗</a>` : ""}</div>
-        </div>
-      </div>
-      <p class="note" style="margin-top:10px">Coincidencia automática (sin verificar). Guardada en la base local.</p>`;
-  } else {
-    html = `<p class="note">Sin coincidencias en Discogs para este archivo.</p>`;
-  }
-  document.querySelectorAll("#discogsBox").forEach((b) => b.innerHTML = html);
+async function verifyMatch(id) {
+  try {
+    const res = await fetch(`${API}/api/discogs/matches/${encodeURIComponent(id)}/verify`, { method: "POST" });
+    if (res.ok) await loadSavedMatch(state.selected);
+  } catch (_) { /* ignore */ }
 }
 
 /* ---------- Layout changes ---------- */

@@ -2,11 +2,17 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.connectors.discogs_client import discogs_client
-from app.services.matcher import match_file, match_folder
+from app.services.matcher import (
+    get_matches_for_file,
+    list_recent_matches,
+    match_file,
+    match_folder,
+    verify_match,
+)
 
 router = APIRouter(prefix="/api/discogs", tags=["discogs"])
 
@@ -111,3 +117,31 @@ def match_file_endpoint(payload: MatchFileRequest) -> dict:
 @router.post("/match-folder")
 def match_folder_endpoint(payload: MatchFolderRequest) -> dict:
     return match_folder(payload.folder, limit=payload.limit)
+
+
+@router.get(
+    "/matches",
+    summary="Matches de Discogs guardados",
+    description=(
+        "Devuelve los matches guardados localmente. Con `path` filtra por archivo "
+        "(más recientes primero); sin `path` lista los más recientes de toda la base."
+    ),
+)
+def matches(
+    path: str = Query("", description="Ruta local del archivo; vacío para listar los más recientes."),
+    limit: int = Query(50, ge=1, le=500, description="Número máximo de matches."),
+) -> dict:
+    items = get_matches_for_file(path, limit=limit) if path else list_recent_matches(limit=limit)
+    return {"path": path, "count": len(items), "matches": items}
+
+
+@router.post(
+    "/matches/{match_id}/verify",
+    summary="Marcar un match como verificado",
+    description="Fija `score=1.0` y `score_note='verified_by_user'` para el match indicado.",
+)
+def verify_match_endpoint(match_id: int) -> dict:
+    result = verify_match(match_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"Match {match_id} no encontrado")
+    return result

@@ -68,7 +68,24 @@ matching local y Cabin básica.
 - [x] **Integración continua** (GitHub Actions): en cada push a `main` y en cada PR
   instala dependencias, hace `py_compile` y ejecuta la suite con `pytest`.
 
+## Fase 5 — indexador robusto (gestión de biblioteca)
+
+- [x] **Optimización SQLite reintroducida**: `PRAGMA journal_mode=WAL` +
+  `synchronous=NORMAL` en `app/services/indexer.py` (pendiente del PR #6 cerrado).
+- [x] **Soporte multi-ruta**: variable `MUSIC_ROOTS` en `.env` (rutas separadas por
+  `;`); `parse_music_roots` mantiene compatibilidad (si está vacía, usa `MUSIC_MASTER`).
+- [x] **Inventario unificado**: el esquema guarda por track ruta completa, **hash
+  sha256**, tags, fecha de indexado y **fuente de origen** (raíz). Migración segura
+  de la columna `sha256`.
+- [x] **Deduplicación (solo lectura)**: detección de duplicados por hash idéntico y,
+  por separado, por metadatos similares (mismo artista + álbum + título normalizados).
+  Se exponen, no se borran.
+- [x] **Endpoint `GET /api/music/inventory`**: filtros por `source` y por `status`
+  (all / duplicated / unique), paginado con cabecera `X-Total-Count`.
+- [x] Tests de multi-ruta, WAL, sha256, deduplicación (hash y metadatos) y endpoint.
+
 ## Pendiente / siguiente
 
+- Conversión a WAV con **ffmpeg** (bloque aparte, su propio PR).
 - Indexado incremental / en segundo plano para bibliotecas muy grandes.
 - App de escritorio (Electron) replicando las pantallas de la web.
